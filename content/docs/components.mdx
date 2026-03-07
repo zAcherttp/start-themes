@@ -1,0 +1,43 @@
+---
+title: Usage
+description: Using the useTheme hook to build a theme toggle.
+---
+
+Once the hook is securely wired into your root router, you can consume it anywhere in your TanStack Start application to easily build a theme toggle component.
+
+```tsx title="src/components/ThemeToggle.tsx"
+import { useTheme } from "@/hooks/use-themes";
+
+export default function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+
+  function toggleMode() {
+    const nextMode =
+      theme === "light" ? "dark" : theme === "dark" ? "auto" : "light";
+    setTheme(nextMode);
+  }
+
+  const label =
+    theme === "auto"
+      ? "Theme mode: auto (system). Click to switch to light mode."
+      : `Theme mode: ${theme}. Click to switch mode.`;
+
+  return (
+    <button
+      type="button"
+      onClick={toggleMode}
+      aria-label={label}
+      title={label}
+      className="select-none rounded-full px-3 py-1.5 text-sm font-semibold transition"
+    >
+      {theme === "auto" ? "Auto" : theme === "dark" ? "Dark" : "Light"}
+    </button>
+  );
+}
+```
+
+## How It Works
+
+1. Calling `setTheme` effortlessly saves the new preference to the user's cookies via a TanStack `createServerFn`.
+2. A `BroadcastChannel` instantly alerts any other open tabs regarding the change, maintaining synchronized state without hydration mismatches.
+3. The hook automatically freezes the DOM using `document.startViewTransition()`, safely syncing React's state inside the snapshot to provide beautiful cross-fading!

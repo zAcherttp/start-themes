@@ -1,0 +1,61 @@
+---
+title: Setup
+description: Wire the theme hook into your TanStack Start root router.
+---
+
+Once you have copied the `use-themes.ts` hook into your project, you'll need to inject it into your root document so it can guarantee hydration safety and prevent FOUC (Flash of Unstyled Content).
+
+## Update `__root.tsx`
+
+The `useTheme` hook relies on the `theme` being available in your TanStack Router context. You'll need to use `createRootRouteWithContext` to define this.
+
+Additionally, the `themeScript` string must be dangerously injected as an inline script inside your `<head>` tag.
+
+```tsx title="src/routes/__root.tsx"
+import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
+import * as React from 'react';
+import { getThemeServerFn, themeScript } from '@/hooks/use-themes';
+import appCss from '@/styles/app.css?url';
+
+interface MyRouterContext {
+  theme: 'light' | 'dark' | 'auto';
+}
+
+export const Route = createRootRouteWithContext<MyRouterContext>()({
+  // 1. Fetch the user's persisted cookie using the server function
+  beforeLoad: async () => ({ theme: await getThemeServerFn() }),
+  head: () => ({
+    meta: [
+      { charSet: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+    ],
+    links: [{ rel: 'stylesheet', href: appCss }],
+  }),
+  component: RootComponent,
+});
+
+function RootComponent() {
+  return (
+    <RootDocument>
+      <Outlet />
+    </RootDocument>
+  );
+}
+
+function RootDocument({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* 2. Block rendering and inject the CSS theme actively before paint */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: theming script */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+```

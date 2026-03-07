@@ -1,0 +1,156 @@
+---
+title: Installation
+description: Add the useTheme hook to your TanStack Start project.
+---
+
+The `useTheme` hook is a lightweight, drop-in replacement for `next-themes` designed exclusively for TanStack Start applications.
+
+It uses a blocking inline script to prevent Flash of Unstyled Content (FOUC) and leverages the native View Transitions API for buttery smooth cross-fades.
+
+## 1. Install Dependencies
+
+You only need `zod` to validate the server-side action data.
+
+```package-install
+zod
+```
+
+## 2. Copy the Hook
+
+Create a new file at `src/hooks/use-themes.ts` and copy the following implementation code.
+
+```ts title="src/hooks/use-themes.ts"
+import {
+	rootRouteId,
+	useRouteContext,
+	useRouter,
+} from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
+import { getCookie, setCookie } from "@tanstack/react-start/server";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { flushSync } from "react-dom";
+import * as z from "zod";
+
+const storageKey = "app-theme";
+const syncChannel = "app-theme-sync";
+
+let isTransitioning = false;
+
+export const themeScript = `(function() {
+  var c = document.cookie.match(/app-theme=([^;]+)/);
+  var s = c ? c[1] : 'auto';
+  var t = s === 'light' || s === 'dark' 
+    ? s 
+    : window.matchMedia('(prefers-color-scheme: dark)').matches 
+      ? 'dark' 
+      : 'light';
+  var e = document.documentElement;
+  e.classList.remove('light', 'dark', 'auto');
+  e.classList.add(t);
+  e.style.colorScheme = t;
+})();`;
+
+const themeValidator = z.enum(["light", "dark", "auto"]);
+
+export type AppTheme = z.infer<typeof themeValidator>;
+
+export const getThemeServerFn = createServerFn().handler((): AppTheme => {
+	const stored = getCookie(storageKey);
+	if (stored === "light" || stored === "dark") return stored;
+	return "auto";
+});
+
+export const setThemeServerFn = createServerFn()
+	.inputValidator(themeValidator)
+	.handler(({ data }) => {
+		setCookie(storageKey, data, { maxAge: 60 * 60 * 24 * 365 });
+		return data;
+	});
+
+function applyThemeClass(resolved: "light" | "dark") {
+	const el = document.documentElement;
+	if (el.classList.contains(resolved)) return;
+	el.classList.remove("light", "dark");
+	el.classList.add(resolved);
+	el.style.colorScheme = resolved;
+}
+
+export function useTheme(): {
+	theme: AppTheme;
+	resolvedTheme: "light" | "dark" | null;
+	setTheme: (value: AppTheme) => void;
+} {
+	const { theme: serverTheme } = useRouteContext({ from: rootRouteId });
+	const router = useRouter();
+	const [deviceTheme, setDeviceTheme] = useState<"light" | "dark" | null>(null);
+
+	useEffect(() => {
+		const mq = window.matchMedia("(prefers-color-scheme: dark)");
+		const update = () => setDeviceTheme(mq.matches ? "dark" : "light");
+		const onChange = () => setDeviceTheme(mq.matches ? "dark" : "light");
+		update();
+		mq.addEventListener("change", onChange);
+		return () => mq.removeEventListener("change", onChange);
+	}, []);
+
+	useEffect(() => {
+		const channel = new BroadcastChannel(syncChannel);
+		channel.onmessage = (e) => {
+			if (e.data === "light" || e.data === "dark" || e.data === "auto") {
+				setLocalTheme(e.data);
+			}
+			void router.invalidate();
+		};
+		return () => channel.close();
+	}, [router]);
+
+	const [theme, setLocalTheme] = useState<AppTheme>(serverTheme);
+
+	useEffect(() => {
+		setLocalTheme(serverTheme);
+	}, [serverTheme]);
+
+	const resolvedTheme = theme === "auto" ? deviceTheme : theme;
+
+	useLayoutEffect(() => {
+		if (!resolvedTheme) return;
+		applyThemeClass(resolvedTheme);
+	}, [resolvedTheme]);
+
+	const setTheme = (value: AppTheme) => {
+		if (theme === value) return;
+
+		const persistAndNotify = () => {
+			void (async () => {
+				await setThemeServerFn({ data: value });
+				const channel = new BroadcastChannel(syncChannel);
+				channel.postMessage(value);
+				channel.close();
+				void router.invalidate();
+			})();
+		};
+
+		if (document.startViewTransition) {
+			if (isTransitioning) return;
+			isTransitioning = true;
+
+			const transition = document.startViewTransition(() => {
+				flushSync(() => {
+					setLocalTheme(value);
+				});
+			});
+
+			transition.finished.finally(() => {
+				isTransitioning = false;
+			});
+
+			persistAndNotify();
+		} else {
+			setLocalTheme(value);
+			persistAndNotify();
+		}
+	};
+
+	return { theme, resolvedTheme, setTheme };
+}
+```
