@@ -1,36 +1,48 @@
 ---
 title: Usage
-description: Using the useTheme hook to build a theme toggle.
+description: Using the useTheme hook to build theme toggles and preset selectors.
+icon: Palette
 ---
 
-Once the hook is securely wired into your root router, you can consume it anywhere in your TanStack Start application to easily build a theme toggle component.
+Once the hook is securely wired into your root router, you can consume it anywhere in your TanStack Start application to easily build mode toggles or color preset switches.
 
-```tsx title="src/components/ThemeToggle.tsx"
+## Switching Modes (Dark/Light)
+
+Use `modePreference` and `setMode` (or `nextMode`) to toggle the theme mode.
+
+```tsx title="src/components/ModeToggle.tsx"
 import { useTheme } from "@/hooks/use-themes";
 
-export default function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-
-  function toggleMode() {
-    const nextMode =
-      theme === "light" ? "dark" : theme === "dark" ? "auto" : "light";
-    setTheme(nextMode);
-  }
-
-  const label =
-    theme === "auto"
-      ? "Theme mode: auto (system). Click to switch to light mode."
-      : `Theme mode: ${theme}. Click to switch mode.`;
+export default function ModeToggle() {
+  const { modePreference, nextMode } = useTheme();
 
   return (
     <button
       type="button"
-      onClick={toggleMode}
-      aria-label={label}
-      title={label}
-      className="select-none rounded-full px-3 py-1.5 text-sm font-semibold transition"
+      onClick={nextMode}
     >
-      {theme === "auto" ? "Auto" : theme === "dark" ? "Dark" : "Light"}
+      Mode: {modePreference}
+    </button>
+  );
+}
+```
+
+## Switching Presets
+
+Likewise, you can switch between pre-configured aesthetic themes like `shadcn`, `ocean`, `ruby`, and more!
+
+```tsx title="src/components/PresetToggle.tsx"
+import { useTheme } from "@/hooks/use-themes";
+
+export default function PresetToggle() {
+  const { presetPreference, nextPreset } = useTheme();
+
+  return (
+    <button
+      type="button"
+      onClick={nextPreset}
+    >
+      Preset: {presetPreference}
     </button>
   );
 }
@@ -38,6 +50,6 @@ export default function ThemeToggle() {
 
 ## How It Works
 
-1. Calling `setTheme` effortlessly saves the new preference to the user's cookies via a TanStack `createServerFn`.
+1. Calling `setMode` or `setPreset` effortlessly saves the new preference to the user's cookies via TanStack `createServerFn` actions.
 2. A `BroadcastChannel` instantly alerts any other open tabs regarding the change, maintaining synchronized state without hydration mismatches.
 3. The hook automatically freezes the DOM using `document.startViewTransition()`, safely syncing React's state inside the snapshot to provide beautiful cross-fading!

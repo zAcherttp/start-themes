@@ -7,15 +7,16 @@ import {
 import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import type * as React from "react";
 import {
+  type AppPreset,
   getThemeServerFn,
+  type ThemeState,
   themeScript,
   useTheme,
-  type AppPreset,
 } from "@/hooks/use-themes";
 import appCss from "@/styles/app.css?url";
 
 interface MyRouterContext {
-  theme: "light" | "dark" | "auto";
+  theme?: ThemeState;
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
@@ -30,10 +31,35 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Fumadocs on TanStack Start",
+        title: "useTheme on TanStack Start",
+      },
+      {
+        name: "description",
+        content:
+          "A flawless, hydration-safe, cross-tab synced theme hook wrapped in the native View Transitions API. Built exclusively for TanStack Router.",
+      },
+      {
+        name: "theme-color",
+        content: "#ffffff",
       },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      {
+        rel: "icon",
+        type: "image/png",
+        href: "/favicon-96x96.png",
+        sizes: "96x96",
+      },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "shortcut icon", href: "/favicon.ico" },
+      {
+        rel: "apple-touch-icon",
+        sizes: "180x180",
+        href: "/apple-touch-icon.png",
+      },
+      { rel: "manifest", href: "/site.webmanifest" },
+    ],
   }),
   component: RootComponent,
 });

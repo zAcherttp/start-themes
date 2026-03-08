@@ -1,24 +1,36 @@
 ---
 title: Setup
 description: Wire the theme hook into your TanStack Start root router.
+icon: Settings
 ---
 
 Once you have copied the `use-themes.ts` hook into your project, you'll need to inject it into your root document so it can guarantee hydration safety and prevent FOUC (Flash of Unstyled Content).
 
 ## Update `__root.tsx`
 
-The `useTheme` hook relies on the `theme` being available in your TanStack Router context. You'll need to use `createRootRouteWithContext` to define this.
+The `useTheme` hook relies on a `ThemeState` object being available in your TanStack Router context. You'll need to use `createRootRouteWithContext` to define this.
 
-Additionally, the `themeScript` string must be dangerously injected as an inline script inside your `<head>` tag.
+Additionally, the `themeScript` string must be injected as an inline script inside your `<head>` tag.
+
+import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
+
+<Accordions>
+<Accordion title="Why are these two things necessary?">
+
+- **Router Context (`ThemeState`)**: TanStack Start apps render on the server. By fetching the theme cookie in `beforeLoad` and placing it in context, we inject the synchronized state directly into React's SSR stream. This completely eliminates React hydration mismatch errors.
+- **Script Injection (`themeScript`)**: Server-Side Rendering (SSR) always emits the actual HTML markup *before* client-side Javascript runs. This inline script blocks the parser instantly just before css styles load to inject the proper Tailwind `.dark` and preset `.ocean`/`.shadcn` classes directly onto the `<html>` element based on cookies and OS settings. Without this, your users would see a "Flash of Unstyled Content" (a split-second bright flash) on every page refresh!
+
+</Accordion>
+</Accordions>
 
 ```tsx title="src/routes/__root.tsx"
 import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
 import * as React from 'react';
-import { getThemeServerFn, themeScript } from '@/hooks/use-themes';
+import { getThemeServerFn, themeScript, type ThemeState } from '@/hooks/use-themes';
 import appCss from '@/styles/app.css?url';
 
 interface MyRouterContext {
-  theme: 'light' | 'dark' | 'auto';
+  theme: ThemeState;
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
