@@ -4,6 +4,7 @@ import {
   Outlet,
   Scripts,
 } from "@tanstack/react-router";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import type * as React from "react";
 import {
@@ -99,6 +100,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         className={`flex min-h-screen flex-col antialiased font-sans transition-colors duration-500 ${selectionClass}`}
       >
         <RootProvider theme={{ enabled: false }}>{children}</RootProvider>
+        <SpeedInsights />
         <Scripts />
       </body>
     </html>
