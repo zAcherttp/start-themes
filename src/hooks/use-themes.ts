@@ -1,7 +1,7 @@
 import {
-	rootRouteId,
-	useRouteContext,
-	useRouter,
+  rootRouteId,
+  useRouteContext,
+  useRouter,
 } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie, setCookie } from "@tanstack/react-start/server";
@@ -10,183 +10,272 @@ import { flushSync } from "react-dom";
 import * as z from "zod";
 
 const themeCookieMaxAge = 60 * 60 * 24 * 365;
-const themeCookieName = "theme";
+const modeStorageKey = "theme-mode";
+const presetStorageKey = "theme-preset";
+const syncChannel = "theme-sync";
 
-const storageKey = themeCookieName;
-const syncChannel = `${themeCookieName}-sync`;
+// --- THEME MODES ---
+export const modes = ["light", "dark"] as const;
+export type Mode = (typeof modes)[number];
+export type AppMode = "auto" | Mode;
+const modeValidator = z.enum(["auto", ...modes] as [
+  string,
+  ...string[],
+]) as z.ZodType<AppMode>;
 
-// Users can define their custom list of themes here.
-// By default, "auto" only resolve to dark | light.
-// This overrides the default list.
-export const themes = ["light", "dark", "black"] as const;
+// --- THEME PRESETS ---
+export const presets = [
+  "shadcn",
+  "ocean",
+  "aspen",
+  "ruby",
+  "catppuccin",
+] as const;
+export type AppPreset = (typeof presets)[number];
+const presetValidator = z.enum(
+  presets as unknown as [string, ...string[]],
+) as z.ZodType<AppPreset>;
 
-export type Theme = (typeof themes)[number];
-
-export type AppTheme = "auto" | Theme;
-
-export const themeDisplayNames: Record<AppTheme, string> = {
-	light: "Light",
-	dark: "Dark",
-	auto: "Auto",
-	black: "Black",	
+export const presetDisplayNames: Record<AppPreset, string> = {
+  shadcn: "Default (Shadcn)",
+  ocean: "Ocean",
+  aspen: "Aspen",
+  ruby: "Ruby",
+  catppuccin: "Catppuccin",
 };
 
-export type AppThemeDisplayName = (typeof themeDisplayNames)[AppTheme];
-
-const themeValidator = z.enum(["auto", ...themes] as [string, ...string[]]) as z.ZodType<AppTheme>;
+export type ThemeState = {
+  mode: AppMode;
+  preset: AppPreset;
+};
 
 // Module-level lock to prevent concurrent View Transitions
 let isTransitioning = false;
 
 /**
  * Inline blocking script — injected into <head> before stylesheets to prevent
- * flicker. Reads the cookie and resolves auto via matchMedia before first paint.
+ * flicker. Reads the cookies and resolves auto via matchMedia before first paint.
  */
-const removeClasses = ["auto", ...themes].map((t) => `'${t}'`).join(",");
-export const themeScript = `(function(){var c=document.cookie.match(/${storageKey}=([^;]+)/);var s=c?c[1]:'auto';var t=${JSON.stringify(themes)}.includes(s)?s:window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';var e=document.documentElement;e.classList.remove(${removeClasses});e.classList.add(t);e.style.colorScheme=t==='dark'?'dark':'light';})();`;
-
+const removePresetClasses = presets
+  .filter((p) => p !== "shadcn")
+  .map((p) => `'${p}'`)
+  .join(",");
+export const themeScript = `(function(){
+	var m=document.cookie.match(/${modeStorageKey}=([^;]+)/);
+	var p=document.cookie.match(/${presetStorageKey}=([^;]+)/);
+	var sm=m?m[1]:'auto';
+	var sp=p?p[1]:'shadcn';
+	
+	var resMode = sm==='light'||sm==='dark'?sm:window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+	var resPreset = ${JSON.stringify(presets)}.includes(sp)?sp:'shadcn';
+	
+	var e=document.documentElement;
+	e.classList.remove('light','dark',${removePresetClasses});
+	e.classList.add(resMode);
+	if (resPreset !== 'shadcn') {
+		e.classList.add(resPreset);
+	}
+	e.style.colorScheme=resMode;
+})();`;
 
 /**
- * Get the theme preference from the server.
- * @returns The theme preference.
+ * Get the theme preferences from the server.
  */
-export const getThemeServerFn = createServerFn().handler((): AppTheme => {
-	const stored = getCookie(storageKey);
-	const parsed = themeValidator.safeParse(stored);
-	if (parsed.success) return parsed.data;
-	return "auto";
+export const getThemeServerFn = createServerFn().handler((): ThemeState => {
+  const modeStored = getCookie(modeStorageKey);
+  const presetStored = getCookie(presetStorageKey);
+
+  const modeParsed = modeValidator.safeParse(modeStored);
+  const presetParsed = presetValidator.safeParse(presetStored);
+
+  return {
+    mode: modeParsed.success ? modeParsed.data : "auto",
+    preset: presetParsed.success ? presetParsed.data : "shadcn",
+  };
 });
 
 /**
- * Set the theme preference on the server.
- * @param value The theme preference.
+ * Set the theme mode preference on the server.
  */
-export const setThemeServerFn = createServerFn()
-	.inputValidator(themeValidator)
-	.handler(({ data }) => {
-		setCookie(storageKey, data, { maxAge: themeCookieMaxAge });
-		return data;
-	});
+export const setModeServerFn = createServerFn()
+  .inputValidator(modeValidator)
+  .handler(({ data }) => {
+    setCookie(modeStorageKey, data, { maxAge: themeCookieMaxAge });
+    return data;
+  });
+
+/**
+ * Set the theme preset preference on the server.
+ */
+export const setPresetServerFn = createServerFn()
+  .inputValidator(presetValidator)
+  .handler(({ data }) => {
+    setCookie(presetStorageKey, data, { maxAge: themeCookieMaxAge });
+    return data;
+  });
 
 /**
  * Apply the resolved theme class to <html>.
  */
-function applyThemeClass(resolved: Theme | "light" | "dark") {
-	const el = document.documentElement;
-	if (el.classList.contains(resolved)) return;
-	el.classList.remove(...themes, "light", "dark");
-	el.classList.add(resolved);
-	el.style.colorScheme = resolved === "dark" ? "dark" : "light";
+function applyThemeClasses(resolvedMode: Mode, preset: AppPreset) {
+  const el = document.documentElement;
+
+  el.classList.remove(
+    "light",
+    "dark",
+    ...presets.filter((p) => p !== "shadcn"),
+  );
+  el.classList.add(resolvedMode);
+  if (preset !== "shadcn") {
+    el.classList.add(preset);
+  }
+  el.style.colorScheme = resolvedMode;
 }
 
 /**
- * Custom hook to manage the application's theme, closely mirroring the behavior of \`next-themes\` in a TanStack Start context.
- *
- * Features:
- * - [FEATURE-01]: Tracks and listens to the local system theme (OS preference).
- * - [FEATURE-02]: Synchronizes theme changes across browser tabs using \`BroadcastChannel\`.
- * - [FEATURE-03]: Keeps local theme state in sync with server state during navigations.
- * - [FEATURE-04]: Applies the resolved theme synchronously to the DOM to prevent FOUC.
- * - [FEATURE-05]: Exposes a setter that persists to the server and utilizes the View Transitions API for smooth cross-fades.
- *
- * @returns An object containing the current \`themePreference\`, the \`resolvedTheme\`, and a \`setTheme\` function to update the theme.
+ * Custom hook to manage the application's theme and preset scheme.
  */
 export function useTheme(): {
-	themePreference: AppTheme;
-	themeDisplayName: AppThemeDisplayName;
-	resolvedTheme: Theme | "light" | "dark" | null;
-	setTheme: (value: AppTheme) => void;
-	nextTheme: () => void;
+  modePreference: AppMode;
+  presetPreference: AppPreset;
+  presetDisplayName: string;
+  resolvedMode: Mode | null;
+  setMode: (value: AppMode) => void;
+  setPreset: (value: AppPreset) => void;
+  nextMode: () => void;
+  nextPreset: () => void;
 } {
-	const { theme: serverTheme } = useRouteContext({ from: rootRouteId });
-	const router = useRouter();
-	const [deviceTheme, setDeviceTheme] = useState<"light" | "dark" | null>(null);
+  // Cast due to structure change, assume route context provides { theme: ThemeState }
+  const { theme: serverTheme } = useRouteContext({
+    from: rootRouteId,
+  }) as unknown as { theme: ThemeState };
+  const router = useRouter();
+  const [deviceMode, setDeviceMode] = useState<Mode | null>(null);
 
-	// [FEATURE-01]: Always track OS preference so deviceTheme is never stale.
-	useEffect(() => {
-		const mq = window.matchMedia("(prefers-color-scheme: dark)");
-		const update = () => setDeviceTheme(mq.matches ? "dark" : "light");
-		const onChange = () => setDeviceTheme(mq.matches ? "dark" : "light");
-		update();
-		mq.addEventListener("change", onChange);
-		return () => mq.removeEventListener("change", onChange);
-	}, []);
+  // [FEATURE-01]: Always track OS preference
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setDeviceMode(mq.matches ? "dark" : "light");
+    const onChange = () => setDeviceMode(mq.matches ? "dark" : "light");
+    update();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
-	// [FEATURE-02]: Sync theme changes across tabs
-	useEffect(() => {
-		const channel = new BroadcastChannel(syncChannel);
-		channel.onmessage = (e) => {
-			const parsed = themeValidator.safeParse(e.data);
-			if (parsed.success) {
-				setLocalTheme(parsed.data);
-			}
-			void router.invalidate();
-		};
-		return () => channel.close();
-	}, [router]);
+  const [modePreference, setLocalMode] = useState<AppMode>(
+    serverTheme?.mode ?? "auto",
+  );
+  const [presetPreference, setLocalPreset] = useState<AppPreset>(
+    serverTheme?.preset ?? "shadcn",
+  );
 
-	// Local theme preference — initialized from server, updated optimistically.
-	const [themePreference, setLocalTheme] = useState<AppTheme>(serverTheme);
+  // [FEATURE-02]: Sync theme changes across tabs
+  useEffect(() => {
+    const channel = new BroadcastChannel(syncChannel);
+    channel.onmessage = (e) => {
+      if (e.data?.type === "mode") {
+        const parsed = modeValidator.safeParse(e.data.value);
+        if (parsed.success) setLocalMode(parsed.data);
+      } else if (e.data?.type === "preset") {
+        const parsed = presetValidator.safeParse(e.data.value);
+        if (parsed.success) setLocalPreset(parsed.data);
+      }
+      void router.invalidate();
+    };
+    return () => channel.close();
+  }, [router]);
 
-	// [FEATURE-03]: Sync local state if server state changes via navigation/actions
-	useEffect(() => {
-		setLocalTheme(serverTheme);
-	}, [serverTheme]);
+  // [FEATURE-03]: Sync local state if server state changes
+  useEffect(() => {
+    if (serverTheme) {
+      setLocalMode(serverTheme.mode);
+      setLocalPreset(serverTheme.preset);
+    }
+  }, [serverTheme]);
 
-	// Resolve to concrete Theme from local state only.
-	const resolvedTheme = themePreference === "auto" ? deviceTheme : themePreference;
+  // Resolve mode
+  const resolvedMode = modePreference === "auto" ? deviceMode : modePreference;
 
-	// [FEATURE-04]: Single write path to <html>: useLayoutEffect fires synchronously after
-	// React's DOM mutations and before the browser paints.
-	useLayoutEffect(() => {
-		if (!resolvedTheme) return;
-		applyThemeClass(resolvedTheme);
-	}, [resolvedTheme]);
+  // [FEATURE-04]: Apply DOM classes
+  useLayoutEffect(() => {
+    if (!resolvedMode) return;
+    applyThemeClasses(resolvedMode, presetPreference);
+  }, [resolvedMode, presetPreference]);
 
-	// [FEATURE-05]: Direct server write, View Transition API wrapper, and cross-tab broadcast
-	const setTheme = (value: AppTheme) => {
-		if (themePreference === value) return;
+  // Shared persist wrapper
+  const runWithTransition = (
+    updateDom: () => void,
+    notifyAndPersist: () => void,
+  ) => {
+    if (document.startViewTransition) {
+      if (isTransitioning) return;
+      isTransitioning = true;
+      const transition = document.startViewTransition(() => {
+        flushSync(updateDom);
+      });
+      transition.finished.finally(() => {
+        isTransitioning = false;
+      });
+      notifyAndPersist();
+    } else {
+      updateDom();
+      notifyAndPersist();
+    }
+  };
 
-		const persistAndNotify = () => {
-			void (async () => {
-				await setThemeServerFn({ data: value });
-				const channel = new BroadcastChannel(syncChannel);
-				channel.postMessage(value);
-				channel.close();
-				void router.invalidate();
-			})();
-		};
+  const setMode = (value: AppMode) => {
+    if (modePreference === value) return;
+    runWithTransition(
+      () => setLocalMode(value),
+      () => {
+        void (async () => {
+          await setModeServerFn({ data: value });
+          const channel = new BroadcastChannel(syncChannel);
+          channel.postMessage({ type: "mode", value });
+          channel.close();
+          void router.invalidate();
+        })();
+      },
+    );
+  };
 
-		if (document.startViewTransition) {
-			// Prevent spamming / concurrent transitions
-			if (isTransitioning) return;
-			isTransitioning = true;
+  const setPreset = (value: AppPreset) => {
+    if (presetPreference === value) return;
+    runWithTransition(
+      () => setLocalPreset(value),
+      () => {
+        void (async () => {
+          await setPresetServerFn({ data: value });
+          const channel = new BroadcastChannel(syncChannel);
+          channel.postMessage({ type: "preset", value });
+          channel.close();
+          void router.invalidate();
+        })();
+      },
+    );
+  };
 
-			const transition = document.startViewTransition(() => {
-				flushSync(() => {
-					setLocalTheme(value);
-				});
-			});
+  const nextMode = () => {
+    const available: AppMode[] = [...modes, "auto"];
+    const currentIndex = available.indexOf(modePreference);
+    setMode(available[(currentIndex + 1) % available.length]);
+  };
 
-			transition.finished.finally(() => {
-				isTransitioning = false;
-			});
+  const nextPreset = () => {
+    const currentIndex = presets.indexOf(presetPreference);
+    setPreset(presets[(currentIndex + 1) % presets.length]);
+  };
 
-			persistAndNotify();
-		} else {
-			setLocalTheme(value);
-			persistAndNotify();
-		}
-	};
+  const presetDisplayName = presetDisplayNames[presetPreference];
 
-	const toggleNextTheme = () => {
-		const available: AppTheme[] = [...themes, "auto"];
-		const currentIndex = available.indexOf(themePreference);
-		const nextIndex = (currentIndex + 1) % available.length;
-		setTheme(available[nextIndex]);
-	};
-
-	const themeDisplayName = themeDisplayNames[themePreference];
-
-	return { themePreference, themeDisplayName, resolvedTheme, setTheme, nextTheme: toggleNextTheme };
+  return {
+    modePreference,
+    presetPreference,
+    presetDisplayName,
+    resolvedMode,
+    setMode,
+    setPreset,
+    nextMode,
+    nextPreset,
+  };
 }

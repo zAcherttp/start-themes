@@ -23,7 +23,7 @@
     "clsx": "^2.1.1",
     "fumadocs-core": "16.6.10",
     "fumadocs-mdx": "14.2.9",
-    "fumadocs-ui": "16.6.10",
+    "@fumadocs/base-ui": "16.6.10",
     "lucide-react": "^0.577.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
