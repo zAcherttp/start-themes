@@ -4,7 +4,8 @@ import {
   Outlet,
   Scripts,
 } from "@tanstack/react-router";
-import { SpeedInsights } from "@vercel/speed-insights/react"
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import type * as React from "react";
 import {
@@ -101,6 +102,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       >
         <RootProvider theme={{ enabled: false }}>{children}</RootProvider>
         <SpeedInsights />
+        <Analytics />
         <Scripts />
       </body>
     </html>
