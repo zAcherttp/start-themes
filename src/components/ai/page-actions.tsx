@@ -59,6 +59,7 @@ export function LLMCopyButton({
         }),
       )}
       onClick={onClick}
+      type={"button"}
     >
       {checked ? <Check /> : <Copy />}
       Copy Markdown
