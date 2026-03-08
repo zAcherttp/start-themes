@@ -1,18 +1,18 @@
-import {
-  useTheme,
-  presets,
-  presetDisplayNames,
-  type AppPreset,
-} from "@/hooks/use-themes";
+import { Palette } from "lucide-react";
 import {
   Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
   SelectTrigger,
   SelectValue,
-  SelectContent,
-  SelectItem,
-  SelectGroup,
 } from "@/components/ui/select";
-import { Palette } from "lucide-react";
+import {
+  type AppPreset,
+  presetDisplayNames,
+  presets,
+  useTheme,
+} from "@/hooks/use-themes";
 
 export default function PresetSelect() {
   const { presetPreference, setPreset } = useTheme();

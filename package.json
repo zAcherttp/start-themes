@@ -11,6 +11,7 @@
     "types:check": "fumadocs-mdx && tsc --noEmit",
     "postinstall": "fumadocs-mdx",
     "lint": "biome check",
+    "check": "biome check --write .",
     "format": "biome format --write"
   },
   "dependencies": {

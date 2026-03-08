@@ -1,13 +1,13 @@
-import { useTheme, type AppMode } from "@/hooks/use-themes";
+import { Monitor, Moon, Sun } from "lucide-react";
 import {
   Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
   SelectTrigger,
   SelectValue,
-  SelectContent,
-  SelectItem,
-  SelectGroup,
 } from "@/components/ui/select";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { type AppMode, useTheme } from "@/hooks/use-themes";
 
 const getIcon = (mode: AppMode) => {
   switch (mode) {

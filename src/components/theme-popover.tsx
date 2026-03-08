@@ -1,13 +1,13 @@
+import { Palette } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
-  PopoverTrigger,
   PopoverContent,
   PopoverHeader,
+  PopoverTrigger,
 } from "@/components/ui/popover";
-import { Palette } from "lucide-react";
-import ThemeSelect from "./theme-select";
 import PresetSelect from "./preset-select";
-import { Button } from "@/components/ui/button";
+import ThemeSelect from "./theme-select";
 
 export default function ThemePopover() {
   return (
